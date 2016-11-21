@@ -2,15 +2,17 @@
     <head>
         <meta charset="utf-8" />
         <script src="/dst/horn.js"></script>
+        <title>demo.html</title>
     </head>
     <body>
+        <a href="/demo.html" onclick="location.href=this.href+'?key='+(new Date().getTime());return false;">redirect</a>
         <div>
             <table>
                 <tr>
                     <td>昵称</td>
                     <td><input type="text" id="nick" value="王剑冬" /></td>
                 </tr>
-                <tr>
+                <!-- <tr>
                     <td>连接方式</td>
                     <td>
                         <select id="conn_type">
@@ -22,7 +24,7 @@
                 <tr>
                     <td></td>
                     <td><button id="start">启动连接</button></td>
-                </tr>
+                </tr> -->
                 <tr>
                     <td></td>
                     <td><button id="request_chat">请求对话</button></td>
@@ -55,21 +57,64 @@
         </div>
 
         <script type="text/javascript">
-        $("#start").click(function() {
-            var host = "http://app.horn.com:9092/api";
-            
-            HORN.API.Identity(host, function(uid) {
-                start(host, uid);
-            }, function(j) {
-                console.error(j);
-            })
+        HORN.HOST = "http://app.horn.com:9092/api";
+        HORN.CID = "0DWOanOQ9IqkOd3";
+
+        HORN.OnRestore(function(json) {
+            console.log(json);
+            if(json.chats && json.chats.length == 1) {
+                $("#chat_id").val(json.chats[0].ID);
+            }
+        });
+
+        HORN.OnMessage(function(json) {
+            console.log(json);
+            if(json.data) {
+                for(var i=0; i<json.data.length; i++) {
+                    var m = json.data[i];
+                    switch(m.type) {
+                        case "text":
+                            content.append("<div>"+m.from.name+"说: "+m.text+"</div>");
+                        break;
+                        case "image":
+                            content.append("<div>"+m.from.name+"发送了图片: "+m.image.src+"</div>");
+                        break;
+                        case "file":
+                            content.append("<div>"+m.from.name+"发送了文件: "+m.file.src+"</div>");
+                        break;
+                        case "request_chat":
+                            content.append("<div>"+m.from.name+"请求对话</div>");
+                            HORN.API.JoinChat(m.event.chat.id, function(j) {console.log(arguments);$("#chat_id").val(m.event.chat.id);}, function() {console.log(arguments);});
+                        break;
+                        case "join_chat":
+                            content.append("<div>"+m.from.name+"加入了对话 "+m.event.chat.id+"</div>");
+                        break;
+                    }
+                }
+            }
+        });
+
+        HORN.OnError(function(e) {
+            console.log("onerror");
+        });
+        
+        HORN.Track(function(res) {
+            HORN.Init({
+                uid: res.uid,
+                track_id: res.track_id,
+                fp: res.fp
+            });
+            HORN.StartHeartbeat(function(r) {
+              console.error(r);
+            });
+        }, function(j) {
+            console.error(j);
         });
 
         $("#join").click(function() {
             var chatID = $("#chat_id").val();
-            HORN.API.JoinChat(chatID, function(j) {
+            HORN.JoinChat(chatID, function(j) {
                 console.log(j);
-                //j = JSON.parse(j);
                 $("#chat_id").val(j.chat_id);
             }, function(j) {
                 console.log(j);
@@ -78,9 +123,8 @@
 
         $("#request_chat").click(function() {
             var uid = $("#uid").val();
-            HORN.API.RequestChat([uid], function(j) {
+            HORN.RequestChat([uid], function(j) {
                 console.log(j);
-                //j = JSON.parse(j);
                 $("#chat_id").val(j.chat_id);
             }, function(j) {
                 console.log(j);
@@ -90,67 +134,14 @@
         $("#send").click(function() {
             var chatID = $("#chat_id").val(),
                 text = $("#msg").val(),
-                nick = $("#nick").val(),
-                msg = {"type":"text","text": text};
-                //msg = JSON.stringify({"msg":text, "nick":nick});
+                nick = $("#nick").val();
             
-            HORN.API.SendMsg(chatID, msg, function(j) {
+            HORN.SendMsgText(chatID, text, function(j) {
                 console.log(j);
             }, function(j) {
                 console.log(j);
             });
         });
-
-        function start(host, uid) {
-            var content = $("#content"),
-                msg = $("#msg"),
-                nick = $("#nick").val(),
-                conn_type = $("#conn_type").val();
-
-            HORN.Init({
-                uid: uid,
-                host: host,
-                conn_type: conn_type
-            });
-
-            var conn = HORN.GetConnection();
-
-            conn.on("connected", function(json) {
-                console.log(json);
-                if(json.chats && json.chats.length == 1) {
-                    $("#chat_id").val(json.chats[0].ID);
-                }
-            });
-
-            conn.on("message", function(json) {
-                console.log(json);
-                if(json.data) {
-                    for(var i=0; i<json.data.length; i++) {
-                        var m = json.data[i];
-                        switch(m.type) {
-                            case "text":
-                                content.append("<div>"+m.from.name+"说: "+m.text+"</div>");
-                            break;
-                            case "image":
-                                content.append("<div>"+m.from.name+"发送了图片: "+m.image.src+"</div>");
-                            break;
-                            case "file":
-                                content.append("<div>"+m.from.name+"发送了文件: "+m.file.src+"</div>");
-                            break;
-                            case "request_chat":
-                                content.append("<div>"+m.from.name+"请求对话</div>");
-                                HORN.API.JoinChat(m.event.chat.id, function(j) {console.log(arguments);$("#chat_id").val(m.event.chat.id);}, function() {console.log(arguments);});
-                            break;
-                            case "join_chat":
-                                content.append("<div>"+m.from.name+"加入了对话 "+m.event.chat.id+"</div>");
-                            break;
-                        }
-                    }
-                }
-            });
-
-            conn.start();
-        }
         </script>
     </body>
 </html>
